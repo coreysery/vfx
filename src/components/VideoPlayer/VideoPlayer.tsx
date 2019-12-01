@@ -18,17 +18,23 @@ interface VideoPlayerProps {
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'));
   const webglRef = useRef<HTMLCanvasElement>(null);
+  const [render, setRender] = React.useState((arg: any) => void arg);
 
   const [playing, setPlaying] = useState(false);
   const hls = useMemo(() => new Hls({ enableWorker: false }), []);
 
+  useEffect(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 300;
+    canvasRef.current = canvas;
+  }, []);
+
   // load media
   React.useEffect(() => {
-    console.log('media', videoRef);
     if (videoRef.current) {
-      console.log('here');
       hls.loadSource('https://stream.mux.com/UomiivCQ6LIzUcdSiebETe01Ik102DRBZL.m3u8');
       hls.attachMedia(videoRef.current);
 
@@ -42,19 +48,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = () => {
     if (webglRef.current) {
       const gl = webglRef.current.getContext('webgl');
       if (gl) {
-        blurInit(gl);
+        setRender(() => blurInit(gl));
       }
     }
-  })
+  }, [webglRef]);
 
   const computeFrame = useCallback(() => {
     const ctx = canvasRef.current && canvasRef.current.getContext('2d');
     if (ctx && videoRef.current) {
-      ctx.drawImage(videoRef.current, 0, 0, 600, 300);
-      // const frame = ctx.getImageData(0, 0, 600, 300);
-      // console.log({ frame });
+      const w = videoRef.current.width;
+      const h = videoRef.current.height;
+      ctx.drawImage(videoRef.current, 0, 0, w, h);
+      const frame = ctx.getImageData(0, 0, w, h);
+      if (frame) {
+        render(frame);
+      }
     }
-  }, [videoRef, canvasRef]);
+  }, [videoRef, canvasRef, render]);
 
   useEffect(() => {
     if (playing) {
@@ -63,15 +73,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = () => {
 
       return () => clearInterval(interval);
     }
-  }, [playing])
+  }, [playing, computeFrame])
 
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.addEventListener('play', () => setPlaying(true));
+      videoRef.current.addEventListener('playing', () => setPlaying(true));
       videoRef.current.addEventListener('pause', () => setPlaying(false));
     }
 
-  }, [computeFrame]);
+  }, [videoRef]);
 
   return (
     <Container>
@@ -79,10 +89,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = () => {
         <h3>Source</h3>
         <video ref={videoRef} controls width="600" height="300" />
       </DisplayItem>
-      <DisplayItem>
-        <h3>Canvas</h3>
-        <canvas ref={canvasRef} width="600" height="300" />
-      </DisplayItem>
+      
       <DisplayItem>
         <h3>WebGL</h3>
         <canvas ref={webglRef} width="600" height="300" />
